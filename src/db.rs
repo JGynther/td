@@ -108,7 +108,7 @@ pub fn init_db() -> Connection {
     conn
 }
 
-pub fn add_task(conn: &Connection, task: &str, priority: Option<i64>) {
+pub fn add_task(conn: &Connection, task: &str, priority: Option<i64>, due: Option<String>) {
     match conn.execute(
         "INSERT INTO tasks (task, priority, created_at) VALUES (?1, ?2, ?3);",
         params![task, priority.unwrap_or(3), Utc::now().timestamp()],
@@ -227,19 +227,32 @@ fn get_single_task(conn: &Connection) -> Task {
         .unwrap()
 }
 
+#[cfg(test)]
+macro_rules! add_task {
+    ($conn:expr, $task:expr) => {
+        add_task($conn, $task, None, None)
+    };
+    ($conn:expr, $task:expr, $priority:expr) => {
+        add_task($conn, $task, Some($priority), None)
+    };
+    ($conn:expr, $task:expr, $priority:expr, $due:expr) => {
+        add_task($conn, $task, Some($priority), Some($due))
+    };
+}
+
 #[test]
 fn test_add_tasks() {
     let conn = init_test_db();
 
-    add_task(&conn, "Test task", None);
+    add_task!(&conn, "Test task");
 
     let mut statement = conn.prepare("SELECT COUNT(*) FROM tasks").unwrap();
     let count: i64 = statement.query_row([], |row| row.get(0)).unwrap();
     assert_eq!(count, 1);
 
-    add_task(&conn, "Test task", None);
-    add_task(&conn, "Test task", None);
-    add_task(&conn, "Test task", None);
+    add_task!(&conn, "Test task");
+    add_task!(&conn, "Test task");
+    add_task!(&conn, "Test task");
 
     let mut statement = conn.prepare("SELECT COUNT(*) FROM tasks").unwrap();
     let count: i64 = statement.query_row([], |row| row.get(0)).unwrap();
@@ -250,7 +263,7 @@ fn test_add_tasks() {
 fn test_mark_done() {
     let conn = init_test_db();
 
-    add_task(&conn, "Test task", None);
+    add_task!(&conn, "Test task");
     mark_task_done(&conn, 1);
 
     let task = get_single_task(&conn);
@@ -262,7 +275,7 @@ fn test_mark_done() {
 fn test_select_next_task() {
     let conn = init_test_db();
 
-    add_task(&conn, "Test task", None);
+    add_task!(&conn, "Test task");
     select_next_task(&conn, None);
 
     let task = get_single_task(&conn);
@@ -274,10 +287,10 @@ fn test_select_next_task() {
 fn test_select_next_task_from_multiple() {
     let conn = init_test_db();
 
-    add_task(&conn, "Test task", Some(1)); // id 1
-    add_task(&conn, "Test task", None); // id 2
-    add_task(&conn, "Test task", Some(5)); // id 3
-    add_task(&conn, "Test task", Some(4)); // id 4
+    add_task!(&conn, "Test task", 1); // id 1
+    add_task!(&conn, "Test task"); // id 2
+    add_task!(&conn, "Test task", 5); // id 3
+    add_task!(&conn, "Test task", 4); // id 4
 
     select_next_task(&conn, None);
 
@@ -295,7 +308,7 @@ fn test_select_next_task_from_multiple() {
 fn test_no_next_task_to_select() {
     let conn = init_test_db();
 
-    add_task(&conn, "Test task", None);
+    add_task!(&conn, "Test task");
     mark_task_done(&conn, 1);
     select_next_task(&conn, None);
 

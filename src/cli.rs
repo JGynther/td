@@ -57,6 +57,10 @@ enum Commands {
     #[clap(alias("p"))]
     /// Pause current task
     Pause,
+
+    #[clap(alias("c"))]
+    /// Cancel a task
+    Cancel { id: i64 },
 }
 
 pub fn run() {
@@ -101,5 +105,7 @@ pub fn run() {
             Some(active) => db::mark_task_pending(&conn, active),
             None => println!("No active task to pause."),
         },
+
+        Commands::Cancel { id } => db::mark_task_cancelled(&conn, id),
     }
 }

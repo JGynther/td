@@ -169,6 +169,13 @@ pub fn mark_task_pending(conn: &Connection, task: Task) {
     }
 }
 
+pub fn mark_task_cancelled(conn: &Connection, id: i64) {
+    match update_task_status(conn, id, Status::Cancelled) {
+        Ok(_) => println!("Cancelled task {id}"),
+        Err(err) => println!("{:?}", err),
+    }
+}
+
 pub fn select_next_task(conn: &Connection, id: Option<i64>) {
     let next_id = match id {
         Some(id) => Ok(id),

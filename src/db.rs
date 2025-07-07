@@ -128,7 +128,9 @@ pub fn list_tasks(conn: &Connection, all: bool, completed: bool) {
     let sql = match (all, completed) {
         (true, _) => "SELECT * FROM tasks;",
         (false, true) => "SELECT * FROM tasks WHERE status = 2;",
-        (false, false) => "SELECT * FROM tasks WHERE status = 0;",
+        (false, false) => {
+            "SELECT * FROM tasks WHERE status IN (0, 1) ORDER BY status DESC, priority DESC;"
+        }
     };
 
     let mut statement = conn.prepare(sql).expect("");

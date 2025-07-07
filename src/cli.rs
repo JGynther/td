@@ -49,6 +49,9 @@ enum Commands {
     /// Show current active task
     #[clap(visible_alias("s"))]
     Show,
+
+    /// Pause current task
+    Pause,
 }
 
 pub fn run() {
@@ -78,7 +81,7 @@ pub fn run() {
             };
         }
 
-        Commands::Show {} => match active {
+        Commands::Show => match active {
             Some(active) => {
                 db::print_task_header();
                 println!("{active}")
@@ -87,6 +90,11 @@ pub fn run() {
                 "No active task.
                 Hint: use `td next` to promote one"
             ),
+        },
+
+        Commands::Pause => match active {
+            Some(active) => db::mark_task_pending(&conn, active),
+            None => println!("No active task to pause."),
         },
     }
 }

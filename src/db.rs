@@ -160,6 +160,13 @@ pub fn mark_task_done(conn: &Connection, id: i64) {
     }
 }
 
+pub fn mark_task_pending(conn: &Connection, task: Task) {
+    match update_task_status(conn, task.id, Status::Pending) {
+        Ok(_) => println!("Paused task {}", task.id),
+        Err(err) => println!("{:?}", err),
+    }
+}
+
 pub fn select_next_task(conn: &Connection, id: Option<i64>) {
     let next_id = match id {
         Some(id) => Ok(id),

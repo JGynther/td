@@ -10,9 +10,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    #[clap(name = "add, a", alias("a"))]
     /// Add a new task
     Add {
-        /// The actual task
+        /// The actual task, wrap sentences in quotes
         task: String,
 
         #[arg(short, long)]
@@ -20,6 +21,7 @@ enum Commands {
         priority: Option<i64>,
     },
 
+    #[clap(name = "list, l", alias("l"))]
     /// List current tasks
     List {
         #[arg(short, long)]
@@ -31,6 +33,7 @@ enum Commands {
         completed: bool,
     },
 
+    #[clap(name = "done, d", alias("d"))]
     /// Mark a task as complete
     Done {
         id: i64,
@@ -40,16 +43,18 @@ enum Commands {
         next: bool,
     },
 
+    #[clap(name = "next, n", alias("n"))]
     /// Automatically choose next task in line
     Next {
         #[arg(short, long)]
         id: Option<i64>,
     },
 
+    #[clap(name = "show, s", alias("s"))]
     /// Show current active task
-    #[clap(visible_alias("s"))]
     Show,
 
+    #[clap(name = "pause, p", alias("p"))]
     /// Pause current task
     Pause,
 }

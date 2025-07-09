@@ -1,3 +1,4 @@
+use crate::date::{parse_input_date, timestamp_to_local_str};
 use anyhow::{Error, anyhow};
 use chrono::Utc;
 use rusqlite::{Connection, Result, Row, Statement, params};
@@ -39,8 +40,8 @@ pub struct Task {
     task: String,
     status: Status,
     priority: i64,
-    _created_at: i64,
-    _due_at: Option<i64>,
+    created_at: i64,
+    due_at: Option<i64>,
 }
 
 impl std::fmt::Display for Task {
@@ -60,16 +61,27 @@ impl std::fmt::Display for Task {
             _ => "!!!",
         };
 
+        let created =
+            timestamp_to_local_str(self.created_at).unwrap_or_else(|_| "Invalid Date".to_string());
+
+        let due = match self.due_at {
+            None => "Never".to_string(),
+            Some(ts) => timestamp_to_local_str(ts).unwrap_or_else(|_| "Invalid Date".to_string()),
+        };
+
         write!(
             f,
-            "{:<4} {:<11} [{:^3}]  \"{}\"",
-            self.id, status_str, priority_str, self.task
+            "{:<4} {:<11} [{:^3}]  {:<11} {:<11} \"{}\"",
+            self.id, status_str, priority_str, created, due, self.task
         )
     }
 }
 
 pub fn print_task_header() {
-    println!("{:<4} {:<11} {:<6} {}", "ID", "STATUS", "PRIO", "TASK")
+    println!(
+        "{:<4} {:<11} {:<6} {:<11} {:<11} {}",
+        "ID", "STATUS", "PRIO", "CREATED", "DUE", "TASK"
+    )
 }
 
 impl TryFrom<&Row<'_>> for Task {
@@ -81,8 +93,8 @@ impl TryFrom<&Row<'_>> for Task {
             task: row.get(1)?,
             status: Status::from(row.get::<_, i64>(2)?),
             priority: row.get(3)?,
-            _created_at: row.get(4)?,
-            _due_at: row.get(5)?,
+            created_at: row.get(4)?,
+            due_at: row.get(5)?,
         })
     }
 }
@@ -109,9 +121,12 @@ pub fn init_db() -> Connection {
 }
 
 pub fn add_task(conn: &Connection, task: &str, priority: Option<i64>, due: Option<String>) {
+    let due_at = due.and_then(|date| parse_input_date(&date).ok());
+    let created_at = Utc::now().timestamp();
+
     match conn.execute(
-        "INSERT INTO tasks (task, priority, created_at) VALUES (?1, ?2, ?3);",
-        params![task, priority.unwrap_or(3), Utc::now().timestamp()],
+        "INSERT INTO tasks (task, priority, created_at, due_at) VALUES (?1, ?2, ?3, ?4);",
+        params![task, priority.unwrap_or(3), created_at, due_at],
     ) {
         Ok(_) => println!("✓ Added task \"{}\"", task),
         Err(err) => println!("{:?}", err),
@@ -183,7 +198,7 @@ pub fn select_next_task(conn: &Connection, id: Option<i64>) {
             "SELECT id
             FROM tasks
             WHERE status = 0
-            ORDER BY priority DESC, due_at, created_at
+            ORDER BY priority DESC, due_at NULLS LAST, created_at
             LIMIT 1;",
             [],
             |row| row.get(0),

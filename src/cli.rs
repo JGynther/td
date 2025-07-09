@@ -19,6 +19,10 @@ enum Commands {
         #[arg(short, long)]
         /// Priority [1, 5]. Default 3.
         priority: Option<i64>,
+
+        #[arg(short, long)]
+        // Due date
+        due: Option<String>,
     },
 
     #[clap(alias("l"))]
@@ -69,7 +73,11 @@ pub fn run() {
     let active = db::get_current_active_task(&conn);
 
     match args.command {
-        Commands::Add { task, priority } => db::add_task(&conn, &task, priority),
+        Commands::Add {
+            task,
+            priority,
+            due,
+        } => db::add_task(&conn, &task, priority, due),
 
         Commands::List { all, completed } => db::list_tasks(&conn, all, completed),
 

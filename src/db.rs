@@ -1,10 +1,10 @@
 use crate::date::{parse_input_date, timestamp_to_local_str};
 use anyhow::{Error, anyhow};
 use chrono::Utc;
-use rusqlite::{Connection, Result, Row, Statement, params};
+use rusqlite::{Connection, Result, Row, Statement, ToSql, params, types::ToSqlOutput};
 use std::result;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum Status {
     Pending,
     InProgress,
@@ -32,6 +32,12 @@ impl From<Status> for i64 {
             Status::Completed => 2,
             Status::Cancelled => 3,
         }
+    }
+}
+
+impl ToSql for Status {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(i64::from(*self)))
     }
 }
 
@@ -162,7 +168,7 @@ pub fn list_tasks(conn: &Connection, all: bool, completed: bool) {
 fn update_task_status(conn: &Connection, id: i64, status: Status) -> result::Result<usize, Error> {
     match conn.execute(
         "UPDATE tasks SET status = ?1 WHERE id = ?2",
-        [i64::from(status), id],
+        params![status, id],
     ) {
         Ok(0) => Err(anyhow!("No rows were updated given id {id}")),
         Ok(n) => Ok(n),
@@ -197,10 +203,10 @@ pub fn select_next_task(conn: &Connection, id: Option<i64>) {
         None => conn.query_row(
             "SELECT id
             FROM tasks
-            WHERE status = 0
+            WHERE status = ?1
             ORDER BY priority DESC, due_at NULLS LAST, created_at
             LIMIT 1;",
-            [],
+            [Status::Pending],
             |row| row.get(0),
         ),
     };
@@ -219,13 +225,20 @@ pub fn get_current_active_task(conn: &Connection) -> Option<Task> {
     match conn.query_row(
         "SELECT *
         FROM tasks
-        WHERE status = 1
+        WHERE status = ?1
         LIMIT 1;",
-        [],
+        [Status::InProgress],
         |row| Task::try_from(row),
     ) {
         Ok(task) => Some(task),
         Err(_) => None,
+    }
+}
+
+pub fn collect_garbage(conn: &Connection) {
+    match conn.execute("DELETE FROM tasks WHERE status = ?1", [Status::Cancelled]) {
+        Ok(n) => println!("Permanently deleted {n} tasks."),
+        Err(err) => println!("{:?}", err),
     }
 }
 
@@ -240,6 +253,12 @@ fn init_test_db() -> Connection {
 fn get_single_task(conn: &Connection) -> Task {
     conn.query_row("SELECT * FROM tasks", [], |row| Task::try_from(row))
         .unwrap()
+}
+
+#[cfg(test)]
+fn count_tasks(conn: &Connection) -> usize {
+    let mut statement = conn.prepare("SELECT COUNT(*) FROM tasks").unwrap();
+    statement.query_row([], |row| row.get(0)).unwrap()
 }
 
 #[cfg(test)]
@@ -261,17 +280,13 @@ fn test_add_tasks() {
 
     add_task!(&conn, "Test task");
 
-    let mut statement = conn.prepare("SELECT COUNT(*) FROM tasks").unwrap();
-    let count: i64 = statement.query_row([], |row| row.get(0)).unwrap();
-    assert_eq!(count, 1);
+    assert_eq!(count_tasks(&conn), 1);
 
     add_task!(&conn, "Test task");
     add_task!(&conn, "Test task");
     add_task!(&conn, "Test task");
 
-    let mut statement = conn.prepare("SELECT COUNT(*) FROM tasks").unwrap();
-    let count: i64 = statement.query_row([], |row| row.get(0)).unwrap();
-    assert_eq!(count, 4);
+    assert_eq!(count_tasks(&conn), 4);
 }
 
 #[test]
@@ -334,4 +349,16 @@ fn test_no_next_task_to_select() {
         .unwrap();
 
     assert_eq!(count, 0)
+}
+
+#[test]
+fn test_cancel_and_gc() {
+    let conn = init_test_db();
+
+    add_task!(&conn, "Test task");
+
+    mark_task_cancelled(&conn, 1);
+    collect_garbage(&conn);
+
+    assert_eq!(count_tasks(&conn), 0)
 }

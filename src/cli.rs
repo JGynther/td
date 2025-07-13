@@ -64,7 +64,16 @@ enum Commands {
 
     #[clap(alias("c"))]
     /// Cancel a task
-    Cancel { id: i64 },
+    Cancel {
+        id: i64,
+
+        #[arg(short, long)]
+        // Hard delete task on cancel
+        delete: bool,
+    },
+
+    /// Delete cancelled tasks
+    Gc,
 }
 
 pub fn run() {
@@ -114,6 +123,13 @@ pub fn run() {
             None => println!("No active task to pause."),
         },
 
-        Commands::Cancel { id } => db::mark_task_cancelled(&conn, id),
+        Commands::Cancel { id, delete } => {
+            db::mark_task_cancelled(&conn, id);
+            if delete {
+                db::collect_garbage(&conn);
+            }
+        }
+
+        Commands::Gc => db::collect_garbage(&conn),
     }
 }
